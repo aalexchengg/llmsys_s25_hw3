@@ -1,10 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=problem4
-#SBATCH --output=out/problem4.out
-#SBATCH --error=out/problem4.err
+#SBATCH --job-name=ln_final
+#SBATCH --output=out/ln_final.out
+#SBATCH --error=out/ln_final.err
 #SBATCH --partition=general
-#SBATCH --time=1-12:00:00
-#SBATCH --mem=32G
 #SBATCH --gpus=1
 
 # Your job commands go here
@@ -26,6 +24,17 @@ mkdir -p minitorch/cuda_kernels
 nvcc -o minitorch/cuda_kernels/combine.so --shared src/combine.cu -Xcompiler -fPIC
 # verify installation
 python3 -m install
-# Problem 1
 nvcc -o minitorch/cuda_kernels/softmax_kernel.so --shared src/softmax_kernel.cu -Xcompiler -fPIC
-python kernel_tests/test_softmax_fw.py
+nvcc -o minitorch/cuda_kernels/layernorm_kernel.so --shared src/layernorm_kernel.cu -Xcompiler -fPIC
+# Problem 1
+# python kernel_tests/test_softmax_fw.py
+# echo "Finished softmax fw test"
+# Problem 2
+# python kernel_tests/test_softmax_bw.py
+# echo "Finished softmax bw test"
+# Problem 3
+python kernel_tests/test_layernorm_fw.py
+echo "Finished layernorm fw test"
+# Problem 4
+python kernel_tests/test_layernorm_bw.py
+echo "Finished layernorm bw test"
