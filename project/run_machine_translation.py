@@ -7,6 +7,9 @@ import json
 import random
 import datasets
 import numpy as np
+import argparse
+from distutils.util import strtobool
+
 from sacrebleu.metrics import BLEU
 from transformers import AutoTokenizer
 from tokenizers import ByteLevelBPETokenizer
@@ -29,12 +32,11 @@ def get_dataset(dataset_name, model_max_length):
     dataset = {
         split: [
             example for example in dataset[split]
-            if len(example[src_key].split()) + len(
-                example[tgt_key].split()) < model_max_length
+            if len(example[src_key].split()) + len(example[tgt_key].split()) < model_max_length
         ] for split in dataset.keys()
     }
 
-    dataset['test'] = dataset['test'][:100]  # 6750
+    dataset['test'] = dataset['test'][:100]             # 6750
 
     print(json.dumps(
         {'data_size': {split: len(dataset[split]) for split in dataset.keys()}},
@@ -190,26 +192,15 @@ def loss_fn(batch, model):
 
 
 def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc):
-    """
-    Trains the model on the provided examples.
-
-    Parameters:
-    - model: The model to be trained.
-    - optimizer: The optimizer used for updating the model's parameters.
-    - examples: The dataset examples used for training.
-    - n_samples: The random samples to train from "examples".
-    - collate_fn: The function to collate data examples into batches.
-    - batch_size: The number of examples in each batch.
-    - desc: Description for the training process (used in progress bars).
-    """
     model.train()
     random.shuffle(examples)
     examples = examples[:n_samples]
 
     for i in (prog_bar := tqdm.trange(
             0, len(examples), batch_size, desc=f'Training ({desc})')):
+        
         batch = collate_fn(examples=examples[i:i + batch_size])
-
+        
         t0 = time.time()
         optimizer.zero_grad()
         loss = loss_fn(batch=batch, model=model)
@@ -221,9 +212,9 @@ def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc):
         optimizer.step()
         t3 = time.time()
 
-        print(f"Forward: {t1 - t0}")
-        print(f"Backward: {t2 - t1}")
-        print(f"Opt.step: {t3 - t2}")
+        # print(f"Forward: {t1 - t0}")
+        # print(f"Backward: {t2 - t1}")
+        # print(f"Opt.step: {t3 - t2}")
 
         batch_time = time.time() - t0
         prog_bar.set_postfix(
@@ -232,131 +223,26 @@ def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc):
             lr=optimizer.lr)
 
 
-def evaluate_loss(model, examples, batch_size, collate_fn, desc):
-    """
-    Evaluates the model on the provided examples and computes the average loss.
-
-    Parameters:
-    - model: The model to be evaluated.
-    - examples: The dataset examples used for evaluation.
-    - batch_size: The number of examples in each batch.
-    - collate_fn: The function to collate data examples into batches.
-    - desc: Description for the evaluation process (used in progress bars).
-
-    Returns:
-    - The average loss computed over all batches.
-    """
-    model.eval()
-    losses = []
-
-    for i in (prog_bar := tqdm.trange(
-        0, len(examples), batch_size, desc=f'Evaluating ({desc})')):
-        batch = collate_fn(examples=examples[i:i + batch_size])
-        loss = loss_fn(batch=batch, model=model)
-
-        losses.append(loss.item())
-        prog_bar.set_postfix(loss=loss.item())
-
-    return np.mean(losses)
-
-
-def generate(model,
-             examples,
-             src_key,
-             tgt_key,
-             tokenizer,
-             model_max_length,
-             backend,
-             desc):
-    """
-    Generates target sequences for the given source sequences using the model, based on argmax decoding.
-    Note that it runs generation on examples one-by-one instead of in a batched manner.
-
-    Parameters:
-    - model: The model used for generation.
-    - examples: The dataset examples containing source sequences.
-    - src_key: The key for accessing source texts in the examples.
-    - tgt_key: The key for accessing target texts in the examples.
-    - tokenizer: The tokenizer used for encoding texts.
-    - model_max_length: The maximum sequence length the model can handle.
-    - backend: The backend of minitorch tensors.
-    - desc: Description for the generation process (used in progress bars).
-
-    Returns:
-    - A list of generated target sequences.
-    """
-
-    model.eval()
-    gen_sents = []
-    for example in tqdm.tqdm(examples, desc=f'Generating {desc}'):
-        # Run generation for every single example
-
-        token_ids = tokenizer(f'{example[src_key]}<eos_{src_key}>')['input_ids']
-        len_src = len(token_ids)
-
-        while len(token_ids) <= model_max_length:
-            # BEGIN ASSIGN2_2
-            # TODO
-            # run the model with current token_ids, and predict the next token (gen_id)
-            # hint: obtain the logits of next token, and take the argmax.
-            gen_id = 0
-            logits = model(minitorch.tensor_from_numpy(np.array(token_ids).reshape((1, -1)), backend = model.backend))
-            np_logits = logits.to_numpy() # shape of (batch size x seq len x n vocab)
-            gen_id = np.argmax(np_logits[-1][-1])
-            # END ASSIGN2_2
-            if gen_id == tokenizer.vocab[f'<eos_{tgt_key}>']:
-                break
-            else:
-                token_ids.append(gen_id)
-
-        gen_sents.append(tokenizer.decode(token_ids[len_src:]))
-
-    return gen_sents
-
-
-def evaluate_bleu(examples, gen_sents, tgt_key):
-    """
-    Evaluates the BLEU score for generated sentences against the target sentences in the examples.
-
-    Parameters:
-    - examples: The dataset examples used for evaluation.
-    - gen_sents: The generated sentences to be evaluated.
-    - tgt_key: The key for accessing target texts in the examples.
-
-    Returns:
-    - A dictionary containing the BLEU score.
-    """
-    return {
-        'bleu': BLEU().corpus_score(
-            hypotheses=gen_sents,
-            references=[[example[tgt_key] for example in examples]]).score
-    }
+def parse_args():
+    def str2bool(x):
+        return bool(strtobool(x))
+        
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--use-fused-kernel', type=str2bool, default=False)
+    return parser.parse_args()
 
 
 def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
          model_max_length=40,
-         n_epochs=10,
+         n_epochs=1,
          batch_size=128,
          learning_rate=0.02,
          samples_per_epoch=20000,
          n_vocab=10000,
          n_embd=256,
          seed=11111):
-    """
-    The main function to train and evaluate the model on a specified dataset.
-
-    Parameters:
-    - dataset_name: The name of the dataset to be used.
-    - model_max_length: The maximum sequence length the model can handle.
-    - n_epochs: The number of training epochs.
-    - batch_size: The number of examples in each batch.
-    - learning_rate: The learning rate for the optimizer.
-    - samples_per_epoch: Samples from the training dataset every epoch.
-    - n_vocab: The vocabulary size of the BPE tokenizer.
-    - n_embd: The embedding dimension.
-    - seed: Random seed.
-    """
-
+    args = parse_args()
+             
     np.random.seed(seed)
     random.seed(seed)
 
@@ -366,14 +252,15 @@ def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
     backend = minitorch.TensorBackend(CudaKernelOps)
 
     config = {
-        'n_vocab': n_vocab,  # vocab_size
-        'n_embd': n_embd,  # n_embed
-        'n_head': 8,  # n_head
-        'n_positions': model_max_length,  # n_ctx == n_positions
+        'n_vocab'     : n_vocab,  # vocab_size
+        'n_embd'      : n_embd,   # n_embed
+        'n_head'      : 8,    # n_head
+        'n_positions' : model_max_length,  # n_ctx == n_positions
         # 'n_layer'     : 4,    # n_layer
-        'p_dropout': 0.1,  # x_pdrop
-        'ln_eps': 1e-5,  # layer_norm_epsilon
-        'backend': backend
+        'p_dropout'   : 0.1,  # x_pdrop
+        'ln_eps'      : 1e-5, # layer_norm_epsilon
+        'backend'     : backend,
+        'use_fused_kernel': args.use_fused_kernel
     }
 
     model = DecoderLM(**config)
@@ -396,7 +283,7 @@ def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
         tokenizer=tokenizer,
         model_max_length=model_max_length,
         backend=backend)
-
+    
     for epoch_idx in range(n_epochs):
         desc = f'epoch {epoch_idx} / {n_epochs}'
 
@@ -408,39 +295,6 @@ def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
             batch_size=batch_size,
             collate_fn=collate_fn,
             desc=desc)
-
-        validation_loss = evaluate_loss(
-            model=model,
-            examples=dataset['validation'],
-            batch_size=batch_size,
-            collate_fn=collate_fn,
-            desc=desc)
-
-        print(f'Epoch {epoch_idx}: Validation Loss = {validation_loss}')
-
-        gen_sents = generate(
-            model=model,
-            examples=dataset['test'],
-            src_key=src_key,
-            tgt_key=tgt_key,
-            tokenizer=tokenizer,
-            model_max_length=model_max_length,
-            backend=backend,
-            desc=desc)
-
-        gen_examples = []
-        for example, gen_sent in zip(dataset['test'], gen_sents):
-            gen_examples.append({'example': example, 'gen': gen_sent})
-        json.dump(gen_examples, open(
-            f'{workdir}/gen_epoch{epoch_idx}.json', 'w'), indent=4)
-
-        eval_scores = evaluate_bleu(
-            examples=dataset['test'], gen_sents=gen_sents, tgt_key=tgt_key)
-        print(f'Epoch {epoch_idx}: {eval_scores}')
-
-        json.dump(
-            {'validation_loss': float(validation_loss), **eval_scores},
-            open(f'{workdir}/eval_results_epoch{epoch_idx}.json', 'w'))
 
 
 if __name__ == '__main__':

@@ -311,8 +311,6 @@ __global__ void ker_ln_bw_dinp(T *inp_grad, const T *out_grad, const T *inp,
     dxhat.y *= gamma_f4.y;
     dxhat.z *= gamma_f4.z;
     dxhat.w *= gamma_f4.w;
-  }
-  if (threadIdx.x < hidden_dim) {
     // Step 2
     xhat = ((const float4 *)inp)[pos];
     var_denom = rsqrtf((float)vars[blockIdx.x] + LN_EPSILON);
