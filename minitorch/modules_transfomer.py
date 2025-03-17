@@ -122,7 +122,7 @@ class MultiHeadAttention(Module):
         # old solution from hw 2
         else:
             if self.causal:
-                numerator += self.create_causal_mask(queries_len)
+                numerator += self.create_causal_mask(batch_size, num_head, queries_len)
             result = softmax(numerator, dim = 3) @ v
         result = result.permute(0,2,1,3)
         result = result.contiguous().view(batch_size, queries_len, self.n_embd)
