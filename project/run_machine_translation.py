@@ -35,7 +35,6 @@ def get_dataset(dataset_name, model_max_length):
             if len(example[src_key].split()) + len(example[tgt_key].split()) < model_max_length
         ] for split in dataset.keys()
     }
-
     dataset['test'] = dataset['test'][:100]             # 6750
 
     print(json.dumps(
@@ -237,7 +236,7 @@ def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
          n_epochs=1,
          batch_size=128,
          learning_rate=0.02,
-         samples_per_epoch=20000,
+         samples_per_epoch=20000, # was 20000
          n_vocab=10000,
          n_embd=256,
          seed=11111):
@@ -262,6 +261,7 @@ def main(dataset_name='bbaaaa/iwslt14-de-en-preprocess',
         'backend'     : backend,
         'use_fused_kernel': args.use_fused_kernel
     }
+    print(config)
 
     model = DecoderLM(**config)
     optimizer = minitorch.Adam(model.parameters(), lr=learning_rate)

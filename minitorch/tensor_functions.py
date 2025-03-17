@@ -430,7 +430,7 @@ class Attn_Softmax(Function):
       soft_inp, mask = ctx.saved_values
       return (
         out_grad.f.attn_softmax_bw(out_grad, soft_inp),
-        mask
+        zeros(out_grad.shape)
       )
       #   END ASSIGN3_1
 

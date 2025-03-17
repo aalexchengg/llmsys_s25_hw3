@@ -53,9 +53,12 @@ class MultiHeadAttention(Module):
         self.dropout = Dropout(p_dropout)
         ### END YOUR SOLUTION
 
-    def create_causal_mask(self, seq_len):
-        # Returns a 1x1xTxt triangular causal mask for Q @ K^T (You will implicitly broadcast it to BxHxTxT)
-        mask = -np.finfo(datatype).max * np.triu(np.ones((1, 1, seq_len, seq_len), dtype=datatype), 1)
+    def create_causal_mask(self, bs, nh, seq_len):
+        """
+        return a 1x1xTxt triangular causal mask for Q @ K^T (which will get broadcasted to BxHxTxT)
+        """
+        # mask = -np.finfo(datatype).max * np.triu(np.ones((1, 1, seq_len, seq_len), dtype=datatype), 1) # This should be ok, but may be problematic -> the loss will be NaN in Assignment 3 because the mask will not broadcast correctly in the kernel.
+        mask = -np.finfo(datatype).max * np.triu(np.ones((bs, nh, seq_len, seq_len), dtype=datatype), 1) # Correct version for Assignment 3.
         return tensor_from_numpy(mask, backend=self.backend)
 
     def project_to_query_key_value(self, x):
@@ -112,9 +115,9 @@ class MultiHeadAttention(Module):
         # fused kernel solution
         if (self.use_fused_kernel):
             # default has no masking, so all zeroes
-            mask = tensor_from_numpy(np.zeros((1, 1, queries_len, queries_len), dtype=datatype), backend = self.backend)
+            mask = tensor_from_numpy(-np.finfo(datatype).max * np.zeros((batch_size, num_head, queries_len, queries_len), dtype=datatype), backend = self.backend)
             if self.causal:
-                mask = self.create_causal_mask(queries_len)
+                mask = self.create_causal_mask(batch_size, num_head, queries_len)
             result = numerator.attn_softmax(mask) @ v
         # old solution from hw 2
         else:
